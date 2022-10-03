@@ -106,8 +106,9 @@ class Taxes:
 
     """
 
-    income: int
+    income: float
     bracket: List[Bracket] = field(default_factory=lambda: BRACKET)
+    tax_amounts: List[Taxed] = field(default_factory=list)
 
     def __str__(self) -> str:
         """Summary Report
@@ -123,51 +124,34 @@ class Taxes:
                  Taxes Owed:         4,658.50
                    Tax Rate:           11.65%
         """
+        desc = f"{'Summary Report':^34}\n"
+        desc += f"{'=' * 34}\n"
+        desc += f"{'Taxable Income':>15}: {self.income:16,.2f}\n"
+        desc += f"{'Taxes Owed':>15}: {self.taxes:16,.2f}\n"
+        desc += f"{'Tax Rate':>15}: {self.tax_rate:15.2f}%"
+        return desc
 
-        return (
-            "        Summary Report      \n"
-            + "==================================\n"
-            + f"    Taxable Income:        {self.income:,.2f}\n"
-            + f"        Taxes Owed:         {self.taxes:,.2f}\n"
-            + f"        Tax Rate:           {self.tax_rate:,.2f}%\n"
-        )
+    def _record(self, amount: float, rate: float):
+        """Helper function to record tax amounts and rates
+
+        Arguments:
+            amount {float} -- Amount being taxed
+            rate {float} -- The rate that the amount is being taxed at
+        """
+        taxed = round(amount * rate, 2)
+        t = Taxed(amount, rate, taxed)
+        self.tax_amounts.append(t)
 
     def report(self):
         """Prints taxes breakdown report"""
-        print(self)
-        taxes = self.taxes
-        print("        Taxes Breakdown      \n" + "==================================")
-        for taxed in self.tax_amounts:
-            print(f"    {taxed.amount:,.2f} x {taxed.rate:.2f} = {taxed.tax:,.2f}")
-        print("-" * 32)
-        print(f"                Total = {taxes:,.2f}")
-
-    @property
-    def tax_amounts(self):
-
-        tax_income = self.income
-
-        tax_amounts = []
-
-        for bracket, prev_bracket in zip(self.bracket, [Bracket(0, 0)] + self.bracket):
-            if prev_bracket.end <= self.income:
-
-                if bracket.end <= self.income:
-                    amount = bracket.end - prev_bracket.end
-                else:
-                    amount = self.income - prev_bracket.end
-
-                tax_amounts.append(
-                    Taxed(
-                        amount=amount,
-                        rate=bracket.rate,
-                        tax=amount * bracket.rate,
-                    )
-                )
-
-                tax_income -= bracket.end - prev_bracket.end
-
-        return tax_amounts
+        desc = f"{str(self)}\n"
+        desc += f"\n{'Taxes Breakdown':^34}\n"
+        desc += f"{'=' * 34}\n"
+        for tax in self.tax_amounts:
+            desc += f"{tax.amount:12,.2f} x {tax.rate:4.2f} = {tax.tax:12,.2f}\n"
+        desc += f"{'-' * 34}\n"
+        desc += f"{'Total =':>21} {self.taxes:12,.2f}"
+        print(desc.rstrip())
 
     @property
     def taxes(self) -> float:
@@ -179,8 +163,34 @@ class Taxes:
         Returns:
             float -- The amount of taxes owed
         """
-
-        return sum(tax.tax for tax in self.tax_amounts)
+        if not self.tax_amounts:
+            for n, b in enumerate(self.bracket):
+                # if the taxable income is less than the first bracket
+                # tax the income amount and break out of the loop
+                if n == 0:
+                    if self.income > b.end:
+                        self._record(b.end, b.rate)
+                    else:
+                        self._record(self.income, b.rate)
+                        break
+                # if we've gotten to the last bracket just tax the amount
+                # that's above it
+                elif n == len(self.bracket) - 1:
+                    amount = self.income - self.bracket[n - 1].end
+                    self._record(amount, b.rate)
+                else:
+                    # check to see if the taxable income is below the end
+                    # of the current bracket and tax that amount
+                    if self.income <= b.end:
+                        amount = self.income - self.bracket[n - 1].end
+                    else:
+                        amount = b.end - self.bracket[n - 1].end
+                    self._record(amount, b.rate)
+                    # if the taxable income is below the end of the current
+                    # bracket break out of the loop
+                    if self.income <= b.end:
+                        break
+        return self.total
 
     @property
     def total(self) -> float:
@@ -189,7 +199,11 @@ class Taxes:
         Returns:
             float -- Total taxes owed
         """
-        return sum(tax.tax for tax in self.tax_amounts)
+        return (
+            round(sum(t.tax for t in self.tax_amounts), 2)
+            if self.tax_amounts
+            else self.taxes
+        )
 
     @property
     def tax_rate(self) -> float:
@@ -198,12 +212,10 @@ class Taxes:
         Returns:
             float -- Tax rate
         """
-        # round to 2 decimal places
-        return round(self.taxes / self.income * 100, 2)
+        return round((self.total / self.income) * 100, 2)
 
 
 if __name__ == "__main__":
-    salary = 40_000
+    salary = float(input("Taxable income: "))
     t = Taxes(salary)
     t.report()
-

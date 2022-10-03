@@ -22,78 +22,68 @@ quotes = [
 
 
 def _get_quote(qid):
-    """Recommended helper"""
-    return next((quote for quote in quotes if quote["id"] == qid), None)
+    return [quote for quote in quotes if quote["id"] == qid]
 
 
 def _quote_exists(existing_quote):
-    """Recommended helper"""
-
-    # check if existing_quote is in quotes whitout considering the id
-    return any(
-        quote["quote"] == existing_quote["quote"]
-        and quote["movie"] == existing_quote["movie"]
-        for quote in quotes
-    )
+    return [quote for quote in quotes if quote["quote"] == existing_quote]
 
 
 @app.route("/api/quotes", methods=["GET"])
 def get_quotes():
-    """Return all quotes"""
-    return jsonify({"quotes": quotes})
+    return {"quotes": quotes}
 
 
 @app.route("/api/quotes/<int:qid>", methods=["GET"])
 def get_quote(qid):
-    """Return quote with matching id"""
     quote = _get_quote(qid)
     if not quote:
         abort(404)
-    return jsonify({"quotes": [quote]})
+
+    return {"quotes": quote}
 
 
 @app.route("/api/quotes", methods=["POST"])
 def create_quote():
-    """Create a new quote"""
-    if (
-        not request.json
-        or "quote" not in request.json
-        or "movie" not in request.json
-        or _quote_exists(request.json)
-    ):
+    if not request.json:
         abort(400)
-    quote = {
-        "id": quotes[-1]["id"] + 1,
-        "quote": request.json["quote"],
-        "movie": request.json["movie"],
-    }
-    quotes.append(quote)
-    return jsonify({"quote": quote}), 201
+
+    quote = request.json.get("quote")
+    movie = request.json.get("movie")
+    if quote is None or movie is None:
+        abort(400)
+
+    if _quote_exists(quote):
+        abort(400)
+
+    last_quote_id = quotes[-1].get("id", 0)
+    new_quote = dict(id=last_quote_id + 1, quote=quote, movie=movie)
+    quotes.append(new_quote)
+
+    return {"quote": new_quote}, 201
 
 
 @app.route("/api/quotes/<int:qid>", methods=["PUT"])
 def update_quote(qid):
-    """Update an existing quote"""
-    quote = _get_quote(qid)
-    if not quote:
-        abort(404)
     if not request.json:
         abort(400)
-    if "quote" not in request.json or type(request.json["quote"]) is not str:
-        abort(400)
-    if "movie" not in request.json or type(request.json["movie"]) is not str:
-        abort(400)
 
-    quote["quote"] = request.json.get("quote", quote["quote"])
-    quote["movie"] = request.json.get("movie", quote["movie"])
-    return jsonify({"quote": quote})
+    matching_quotes = _get_quote(qid)
+    if len(matching_quotes) != 1:
+        abort(404)
+
+    update_quote = matching_quotes[0]
+    update_quote["quote"] = request.json.get("quote") or update_quote["quote"]
+    update_quote["movie"] = request.json.get("movie") or update_quote["movie"]
+
+    return {"quote": update_quote}, 200
 
 
 @app.route("/api/quotes/<int:qid>", methods=["DELETE"])
 def delete_quote(qid):
-    """Delete quote with matching id"""
-    quote = _get_quote(qid)
-    if not quote:
+    del_quote = _get_quote(qid)
+    if len(del_quote) != 1:
         abort(404)
-    quotes.remove(quote)
-    return jsonify({"result": True}), 204
+
+    quotes.remove(del_quote[0])
+    return {}, 204

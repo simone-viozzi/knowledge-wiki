@@ -34,7 +34,7 @@ class DB:
     """SQLite Database class.
 
     Supports all major CRUD operations.
-    This DB operates in-memory only by default.
+    This DB operates in memory only by default.
 
     Attributes:
         location (str): The location of the database.
@@ -50,17 +50,11 @@ class DB:
     """
 
     def __init__(self, location: Optional[str] = ":memory:"):
-        """Initializes the database.
+        self.location: str = location
 
-        Args:
-            location (str, optional): The location of the database.
-                Either a .db file or the special :memory: value for an
-                in-memory database connection. Defaults to ":memory:".
-        """
-        self.location = location
-        self.table_schemas = {}
-        self.connection = None
-        self.cursor = None
+        self.connection: sqlite3.Connection = None
+        self.cursor: sqlite3.Cursor = None
+        self.table_schemas: Dict[str, List[Tuple[str, SQLiteType]]] = {}
 
     def __enter__(self):
         self.connection = sqlite3.connect(self.location)
@@ -69,8 +63,7 @@ class DB:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.connection:
-            self.connection.close()
+        self.connection.close()
 
     def create(
         self, table: str, schema: List[Tuple[str, SQLiteType]], primary_key: str
@@ -96,19 +89,22 @@ class DB:
         Raises:
             SchemaError: If the given primary key is not part of the schema.
         """
-        if not self.cursor:
-            raise ValueError("You must use the database as a context manager.")
-
-        if primary_key not in [column for column, _ in schema]:
+        if primary_key not in (e[0] for e in schema):
             raise SchemaError("The provided primary key must be part of the schema.")
 
         self.table_schemas[table] = schema
-        
-        columns = ", ".join([f"{column} {sqlite_type.name}" for column, sqlite_type in schema])
 
-        self.cursor.execute(
-            f"CREATE TABLE {table} ({columns}, PRIMARY KEY ({primary_key}));"
-        )
+        columns = []
+        for name, type_ in schema:
+            column = f"{name} {type_.name}"
+
+            if name == primary_key:
+                column = f"{column} primary key"
+
+            columns.append(column)
+
+        sql = f"CREATE TABLE {table} ({', '.join(columns)})"
+        self._execute(sql)
 
     def delete(self, table: str, target: Tuple[str, Any]):
         """Deletes rows from the table.
@@ -120,13 +116,9 @@ class DB:
                 wanted to remove the row(s) with the year 1999, you would pass it
                 ("year", 1999). Only supports "=" operator in this bite.
         """
-        if not self.cursor:
-            raise ValueError("You must use the database as a context manager.")
-
-        self.cursor.execute(
-            f"DELETE FROM {table} WHERE {target[0]} = ?;", (target[1],)
-        )
-
+        sql = f"DELETE FROM {table} WHERE {target[0]}= ?"
+        params = (target[1],)
+        self._execute(sql, params)
 
     def insert(self, table: str, values: List[Tuple]):
         """Inserts one or multiple new records into the database.
@@ -156,25 +148,27 @@ class DB:
             SchemaError: If a value does not respect the table schema or
                 if there are more values than columns for the given table.
         """
-        if not self.cursor:
-            raise ValueError("You must use the database as a context manager.")
+        table_schema = self.table_schemas[table]
 
-
-        schema = self.table_schemas[table]
-        columns_count = len(schema)
-
-        for value in values:
-            if len(value) != columns_count:
-                raise SchemaError(f"Table {table} expects items with {columns_count} values.")
-
-            for (column, column_type), v in zip(schema, value):
-                if not isinstance(v, column_type.value):
-                    raise SchemaError(f"Column {column} expects values of type {column_type.value.__name__}.")
-        
-        self.cursor.executemany(
-            f"INSERT INTO {table} VALUES ({','.join(['?'] * columns_count)});",
-            values,
+        values_mismatch = any(
+            x != y for x, y in zip(map(len, table_schema), map(len, values))
         )
+
+        if values_mismatch:
+            raise SchemaError(
+                f"Table {table} expects items with {len(table_schema)} values."
+            )
+
+        for entry in values:
+            for v, (name, type_) in zip(entry, table_schema):
+                if not isinstance(v, type_.value):
+                    raise SchemaError(
+                        f"Column {name} expects values of type {type_.value.__name__}."
+                    )
+
+        placeholders = ", ".join("?" * len(table_schema))
+        sql = f"INSERT INTO {table} VALUES ({placeholders})"
+        self.cursor.executemany(sql, values)
 
     def select(
         self,
@@ -199,24 +193,19 @@ class DB:
         Returns:
             list: The output returned from the sql command
         """
-        if not self.cursor:
-            raise ValueError("You must use the database as a context manager.")
+        columns = ["*"] if columns is None else columns
 
-        if columns is None:
-            columns = [column for column, _ in self.table_schemas[table]]
+        sql = "SELECT " + ", ".join(columns) + f" FROM {table}"
+        params = tuple()
 
-        if target is None:
-            self.cursor.execute(f"SELECT {','.join(columns)} FROM {table};")
-        else:
+        if target:
             if len(target) == 2:
                 target = (target[0], "=", target[1])
 
-            self.cursor.execute(
-                f"SELECT {','.join(columns)} FROM {table} WHERE {target[0]} {target[1]} ?;",
-                (target[2],),
-            )
+            sql += f" WHERE {target[0]} {target[1]} ?"
+            params = (target[2],)
 
-        return self.cursor.fetchall()
+        return self._execute(sql, params)
 
     def update(self, table: str, new_value: Tuple[str, Any], target: Tuple[str, Any]):
         """Update a record in the database.
@@ -227,13 +216,27 @@ class DB:
                 if you wanted to change "year" to 2001 you would pass it ("year", 2001).
             target (tuple): The row/record to modify. Example ("year", 1991)
         """
-        if not self.cursor:
-            raise ValueError("You must use the database as a context manager.")
+        sql = f"UPDATE {table} SET {new_value[0]}= ? WHERE {target[0]}= ?"
+        params = (new_value[1], target[1])
+        self._execute(sql, params)
 
-        self.cursor.execute(
-            f"UPDATE {table} SET {new_value[0]} = ? WHERE {target[0]} = ?;",
-            (new_value[1], target[1]),
-        )
+    def _execute(self, sql: str, params: Optional[Tuple] = None) -> List[Tuple]:
+        """Executes a SQL command with optional parameters.
+
+        Args:
+            sql (str): SQL command to execute
+            params (tuple, optional): It is common convention to pass variables into
+                SQL commands in this fashion to prevent SQL injection attacks.
+                Defaults to None.
+
+        Returns:
+            (List): Fetches all (remaining) rows of a query result, returning a list.
+                An empty list is returned when no rows are available.
+        """
+        params = tuple() if params is None else params
+        self.cursor.execute(sql, params)
+
+        return self.cursor.fetchall()
 
     @property
     def num_transactions(self) -> int:
@@ -242,39 +245,4 @@ class DB:
         Returns:
             int: Returns the total number of database rows that have been modified.
         """
-        return self.connection.total_changes if self.connection else 0
-
-
-NINJAS = [
-    ("taspotts", 906),
-    ("Tomade", 896),
-    ("tasoak", 894),
-    ("clamytoe", 890),
-]
-
-DB_SCHEMA = [("ninja", SQLiteType.TEXT), ("bitecoins", SQLiteType.INTEGER)]
-
-
-if __name__ == "__main__":
-    db = DB()
-    assert db.location == ":memory:"
-    assert db.cursor is None
-    assert db.connection is None
-    assert db.table_schemas == {}
-
-    with DB() as db:
-        db.create("ninjas", DB_SCHEMA, "ninja")
-        db.insert("ninjas", NINJAS)
-
-    tables = "city", "ninjas"
-    schemas = [("name", SQLiteType.TEXT), ("population", SQLiteType.REAL)], DB_SCHEMA
-    pks = "name", "ninja"
-
-    for table, schema, pk in zip(tables, schemas, pks):
-        with DB() as db:
-            assert db.num_transactions == 0
-            db.create(table, schema, pk)
-            query = f"SELECT name FROM sqlite_master WHERE type= 'table' AND name='{table}';"
-            output = db.cursor.execute(query).fetchall()
-            assert len(output) == 1
-            assert db.num_transactions == 0
+        return self.connection.total_changes

@@ -20,10 +20,19 @@ def top_python_questions(url=cached_so_url):
     res = []
 
     for que in questions:
-        question = que.select_one('.question-hyperlink').getText()
-        votes = que.select_one('.vote-count-post').getText()
+        question = que.select_one('.question-hyperlink')
+        votes = que.select_one('.vote-count-post')
+        views =  que.select_one('.views')
 
-        views = que.select_one('.views').getText().strip()
+        if not (question and votes and views):
+            continue
+
+        votes = votes.getText().strip()
+        question = question.getText()
+        views = views.getText().strip()
+
+        #print(question, votes, views, sep='\n', end='\n\n')
+
         if 'm views' not in views:
             continue
 

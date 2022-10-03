@@ -38,49 +38,56 @@
 # ----------------------------------
 #                 Total =     4,658.50
 
+# %% [markdown]
+# Tax Bracket Calculator
+#
+# Here is the break-down on how much a US citizen's income was
+# taxed in 2019
+#
+# ```
+#       $0 - $9,700   10%
+#   $9,701 - $39,475  12%
+#  $39,476 - $84,200  22%
+#  $84,201 - $160,725 24%
+# $160,726 - $204,100 32%
+# $204,101 - $510,300 35%
+# $510,301 +          37%
+# ```
+#
+# For example someone earning $40,000 would
+# pay $4,658.50, not $40,000 x 22% = $8,800!
+#
+# ```
+#     9,700.00 x 0.10 =       970.00
+#    29,775.00 x 0.12 =     3,573.00
+#       525.00 x 0.22 =       115.50
+# ----------------------------------
+#               Total =     4,658.50
+# ```
+#
+# More detail can be found here:
+# https://www.nerdwallet.com/blog/taxes/federal-income-tax-brackets/
+#
+# Sample output from running the code in the if/main clause:
+#
+# ```
+#           Summary Report
+# ==================================
+#  Taxable Income:        40,000.00
+#      Taxes Owed:         4,658.50
+#        Tax Rate:           11.65%
+#
+#          Taxes Breakdown
+# ==================================
+#     9,700.00 x 0.10 =       970.00
+#    29,775.00 x 0.12 =     3,573.00
+#       525.00 x 0.22 =       115.50
+# ----------------------------------
+#               Total =     4,658.50
+# ```
+
 
 # %%
-"""Tax Bracket Calculator
-
-Here is the break-down on how much a US citizen's income was
-taxed in 2019
-
-      $0 - $9,700   10%
-  $9,701 - $39,475  12%
- $39,476 - $84,200  22%
- $84,201 - $160,725 24%
-$160,726 - $204,100 32%
-$204,101 - $510,300 35%
-$510,301 +          37%
-
-For example someone earning $40,000 would
-pay $4,658.50, not $40,000 x 22% = $8,800!
-
-    9,700.00 x 0.10 =       970.00
-   29,775.00 x 0.12 =     3,573.00
-      525.00 x 0.22 =       115.50
-----------------------------------
-              Total =     4,658.50
-
-More detail can be found here:
-https://www.nerdwallet.com/blog/taxes/federal-income-tax-brackets/
-
-Sample output from running the code in the if/main clause:
-
-          Summary Report
-==================================
- Taxable Income:        40,000.00
-     Taxes Owed:         4,658.50
-       Tax Rate:           11.65%
-
-         Taxes Breakdown
-==================================
-    9,700.00 x 0.10 =       970.00
-   29,775.00 x 0.12 =     3,573.00
-      525.00 x 0.22 =       115.50
-----------------------------------
-              Total =     4,658.50
-"""
 from dataclasses import dataclass, field
 from typing import List, NamedTuple
 
@@ -96,7 +103,7 @@ BRACKET = [
     Bracket(510_301, 0.37),
 ]
 
-
+# %%
 @dataclass
 class Taxes:
     """Taxes class
@@ -215,7 +222,9 @@ class Taxes:
         return round((self.total / self.income) * 100, 2)
 
 
-if __name__ == "__main__":
-    salary = float(input("Taxable income: "))
-    t = Taxes(salary)
-    t.report()
+# %%
+salary = 40000
+t = Taxes(salary)
+t.report()
+
+# %%

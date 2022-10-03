@@ -1,7 +1,7 @@
 import re
 
 
-def password_complexity(password):
+def password_complexity(password):  # sourcery skip: hoist-repeated-if-condition
     """Input: password string, calculate score according to:
     1. Password has both lower- and uppercase letters,
     2. Password contains one or more numbers in addition to one or more characters,
@@ -12,21 +12,21 @@ def password_complexity(password):
        
        return: score int"""
     
-    print(password)
     score = 0
-    if re.search(r'[a-z]', password) and re.search(r'[A-Z]', password):
-        print('1')
+
+    if re.search(r'[A-Z]+', password) and re.search(r'[a-z]+', password):
         score += 1
-    if re.search(r'[0-9]', password) and re.search(r'[a-zA-Z]', password):
-        print('2')
+
+    if re.search(r'[a-z]+', password.lower()) and re.search(r'\d+', password):
         score += 1
-    if re.search(r'[^a-zA-Z0-9]', password):
-        print('3')
+
+    if re.search('[^A-Za-z0-9]+', password):
         score += 1
+
     if len(password) >= 8:
-        print('4')
         score += 1
-    if len(password) >= 8 and not re.search(r'(.)\1', password):
-        print('5')
+
+    if len(password) >= 8 and not re.search(r'(.)(\1{1,})', password):
         score += 1
+
     return score

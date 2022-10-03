@@ -10,13 +10,15 @@
 # Complete cached_property(func) as a decorator function, so that asking
 # "What was the mass of Planet('red') again?" is consistent and quick.
 
+# %%
+import contextlib
 from random import random
-from time import sleep, perf_counter
+from time import perf_counter, sleep
 
-
+# %%
 def cached_property(func):
     """decorator used to cache expensive object attribute lookup"""
-    name = f'_cached_{func.__name__}'
+    name = f"_cached_{func.__name__}"
 
     @property
     def lookup(instance):
@@ -34,32 +36,36 @@ class Planet:
 
     GRAVITY_CONSTANT = 42
     TEMPORAL_SHIFT = 0.12345
-    SOLAR_MASS_UNITS = 'M\N{SUN}'
+    SOLAR_MASS_UNITS = "M\N{SUN}"
 
     def __init__(self, color):
         self.color = color
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({repr(self.color)})'
+        return f"{self.__class__.__name__}({repr(self.color)})"
 
     @cached_property
     def mass(self):
         scale_factor = random()
         sleep(self.TEMPORAL_SHIFT)
-        return (f'{round(scale_factor * self.GRAVITY_CONSTANT, 4)} '
-                f'{self.SOLAR_MASS_UNITS}')
-                
+        return (
+            f"{round(scale_factor * self.GRAVITY_CONSTANT, 4)} "
+            f"{self.SOLAR_MASS_UNITS}"
+        )
 
-import contextlib
-if __name__ == "__main__":
-    blue = Planet('blue')
 
-    start_time = perf_counter()
-    for _ in range(5):
-        blue.mass
-    end_time = perf_counter()
-    elapsed_time = end_time - start_time
-    assert elapsed_time < .5
+# %%
+blue = Planet("blue")
 
-    with contextlib.suppress(AttributeError):
-        blue.mass = 42
+start_time = perf_counter()
+for _ in range(5):
+    blue.mass
+end_time = perf_counter()
+elapsed_time = end_time - start_time
+assert elapsed_time < 0.5
+
+with contextlib.suppress(AttributeError):
+    blue.mass = 42
+
+
+# %%

@@ -65,7 +65,7 @@ elapsed_time = end_time - start_time
 assert elapsed_time < 0.5
 
 with contextlib.suppress(AttributeError):
-    blue.mass = 42
+    blue.mass = 42 # type: ignore
 
 
 # %%
